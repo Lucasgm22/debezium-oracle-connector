@@ -2,8 +2,8 @@
 
 This repository demonstrates how to set up a complete Change Data Capture (CDC) pipeline for local development and testing purposes, using Oracle Database 19c, Debezium, and Apache Kafka. It captures row-level changes (Inserts, Updates, Deletes) from the database in real-time and streams them to Kafka topics.
 
-[!NOTE]
-A raw, sequential log of all the exact terminal and SQL commands executed to build this architecture from scratch is available in the `commands.txt` file included in this repository. You can use it as a quick reference or troubleshooting guide.
+>[!NOTE]
+>A raw, sequential log of all the exact terminal and SQL commands executed to build this architecture from scratch is available in the `commands.txt` file included in this repository. You can use it as a quick reference or troubleshooting guide.
 
 ## 🚀 Prerequisites and Environment Setup
 
@@ -14,9 +14,9 @@ Build the Oracle image following the official Oracle guide:
 [Oracle DB 19c com Docker](https://www.oracle.com/br/technical-resources/articles/database-performance/oracle-db19c-com-docker.html). Ensure the image is tagged correctly so the `docker-compose.yml` can find it.
 
 ### Kafka Connect Configuration (Volume Mount Strategy)
-To use the Debezium Oracle Connector, the Kafka Connect container must be configured with the necessary `.jar` files. Since the official Oracle JDBC driver cannot be bundled due to licensing, you must configure it manually before starting the environment:
+To use the Debezium Oracle Connector, the Kafka Connect container must be configured with the necessary `.jar` files:
 
-1. Download the [Debezium Oracle Connector archive](https://debezium.io/).
+1. Download the [Debezium Oracle Connector archive](https://debezium.io/releases/3.5/).
 2. Place all the extracted Debezium `.jar` files into the `./data/connect-jars/` directory in this repository. The `docker-compose.yml` will mount this folder into the Kafka Connect container's `plugin.path`.
 
 ---
@@ -28,8 +28,8 @@ Once the Oracle image is built and the Kafka Connect plugins are in place, start
 ```bash
 docker compose up -d
 ```
-[!NOTE]
-Note: The Oracle 19c container may take 5 to 15 minutes to fully initialize its database on the first run. Check the logs (docker logs -f oracle-cdc) and wait for the "DATABASE IS READY TO USE!" message before proceeding.
+>[!NOTE]
+>The Oracle 19c container may take 5 to 15 minutes to fully initialize its database on the first run. Check the logs (`docker logs -f oracle`) and wait for the "DATABASE IS READY TO USE!" message before proceeding.
 
 ---
 
@@ -74,12 +74,12 @@ Create tablespaces for LogMiner in both the Container Database (CDB) and Pluggab
 
 ```bash
 # In CDB
-sqlplus sys/dbzpassword@//localhost:1521/ORCLCDB as sysdba
+sqlplus sys/password@//localhost:1521/ORCLCDB as sysdba
 CREATE TABLESPACE logminer_tbs DATAFILE '/opt/oracle/oradata/ORCLCDB/logminer_tbs.dbf' SIZE 25M REUSE AUTOEXTEND ON MAXSIZE UNLIMITED;
 EXIT;
 
 # In PDB
-sqlplus sys/dbzpassword@//localhost:1521/ORCLPDB1 as sysdba
+sqlplus sys/password@//localhost:1521/ORCLPDB1 as sysdba
 CREATE TABLESPACE logminer_tbs DATAFILE '/opt/oracle/oradata/ORCLCDB/ORCLPDB1/logminer_tbs.dbf' SIZE 25M REUSE AUTOEXTEND ON MAXSIZE UNLIMITED;
 EXIT;
 ```
@@ -87,7 +87,7 @@ EXIT;
 Create the user and grant all necessary privileges for LogMining:
 
 ```bash
-sqlplus sys/dbzpassword@//localhost:1521/ORCLCDB as sysdba
+sqlplus sys/password@//localhost:1521/ORCLCDB as sysdba
 ```
 
 ```SQL
@@ -95,7 +95,7 @@ CREATE USER c##dbzuser IDENTIFIED BY dbz DEFAULT TABLESPACE logminer_tbs QUOTA U
 
 GRANT CREATE SESSION TO c##dbzuser CONTAINER=ALL;
 GRANT SET CONTAINER TO c##dbzuser CONTAINER=ALL;
-GRANT SELECT ON V_$DATABASE TO c##dbzuser CONTAINER=ALL;
+GRANT SELECT ON V_$DATABASE to c##dbzuser CONTAINER=ALL;
 GRANT FLASHBACK ANY TABLE TO c##dbzuser CONTAINER=ALL;
 GRANT SELECT ANY TABLE TO c##dbzuser CONTAINER=ALL;
 GRANT SELECT_CATALOG_ROLE TO c##dbzuser CONTAINER=ALL;
@@ -106,7 +106,7 @@ GRANT ALTER SESSION, SET CONTAINER TO c##dbzuser CONTAINER=ALL;
 GRANT CREATE TABLE TO c##dbzuser CONTAINER=ALL;
 GRANT LOCK ANY TABLE TO c##dbzuser CONTAINER=ALL;
 GRANT CREATE SEQUENCE TO c##dbzuser CONTAINER=ALL;
-GRANT EXECUTE ON DBMS_LOGMNR TO c##dbzuser CONTAINER=ALL;
+GRANT EXECUTE ON DBMS_LOGMNR TO c##dbzuser CONTAINER=ALL; 
 GRANT EXECUTE ON DBMS_LOGMNR_D TO c##dbzuser CONTAINER=ALL;
 GRANT SELECT ON V_$LOG TO c##dbzuser CONTAINER=ALL;
 GRANT SELECT ON V_$LOG_HISTORY TO c##dbzuser CONTAINER=ALL;
@@ -115,11 +115,12 @@ GRANT SELECT ON V_$LOGMNR_CONTENTS TO c##dbzuser CONTAINER=ALL;
 GRANT SELECT ON V_$LOGMNR_PARAMETERS TO c##dbzuser CONTAINER=ALL;
 GRANT SELECT ON V_$LOGFILE TO c##dbzuser CONTAINER=ALL;
 GRANT SELECT ON V_$ARCHIVED_LOG TO c##dbzuser CONTAINER=ALL;
-GRANT SELECT ON V_$ARCHIVE_DEST_STATUS TO c##dbzuser CONTAINER=ALL; 
+GRANT SELECT ON V_$ARCHIVE_DEST_STATUS TO c##dbzuser CONTAINER=ALL;
+GRANT SELECT ON V_$ARCHIVE_DEST_STATUS TO c##dbzuser CONTAINER=ALL;
 GRANT SELECT ON V_$TRANSACTION TO c##dbzuser CONTAINER=ALL;
 GRANT SELECT ON V_$MYSTAT TO c##dbzuser CONTAINER=ALL;
 GRANT SELECT ON V_$STATNAME TO c##dbzuser CONTAINER=ALL;
-EXIT;
+exit;
 ```
 
 ---
@@ -129,7 +130,7 @@ EXIT;
 Create an application user and a table to monitor, then generate test data to trigger CDC events.
 
 ```bash
-sqlplus sys/dbzpassword@//localhost:1521/ORCLPDB1 as sysdba
+sqlplus sys/password@//localhost:1521/ORCLPDB1 as sysdba
 ```
 
 ```SQL
@@ -188,8 +189,8 @@ Check the status of the connector to ensure it is running without errors:
 curl -s localhost:8083/connectors/oracle-connector/status | jq
 ```
 
-[!NOTE]
-If you need to debug, run `docker logs -f kafka-connect`
+>[!NOTE]
+>If you need to debug, run `docker logs -f kafka-connect`
 
 ---
 
