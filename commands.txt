@@ -8,6 +8,7 @@ alter system set db_recovery_file_dest = '/opt/oracle/oradata/recovery_area' sco
 shutdown immediate;
 startup mount;
 alter database archivelog;
+alter database open;
 exit;
 
 

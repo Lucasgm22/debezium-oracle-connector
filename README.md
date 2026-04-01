@@ -54,6 +54,7 @@ ALTER SYSTEM SET db_recovery_file_dest = '/opt/oracle/oradata/recovery_area' SCO
 SHUTDOWN IMMEDIATE;
 STARTUP MOUNT;
 ALTER DATABASE ARCHIVELOG;
+ALTER DATABASE OPEN;
 ```
 
 Enable Supplemental Logging:
