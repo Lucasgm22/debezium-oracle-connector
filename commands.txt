@@ -1,0 +1,108 @@
+#SETUP ORACLE
+docker exec -it oracle bash
+ORACLE_SID=ORACLCDB
+mkdir -p /opt/oracle/oradata/recovery_area
+sqlplus / as sysdba
+alter system set db_recovery_file_dest_size = 10G;
+alter system set db_recovery_file_dest = '/opt/oracle/oradata/recovery_area' scope=spfile;
+shutdown immediate;
+startup mount;
+alter database archivelog;
+exit;
+
+
+sqlplus sys/password@//localhost:1521/ORCLCDB as sysdba
+ALTER DATABASE ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;
+ALTER DATABASE ADD SUPPLEMENTAL LOG DATA;
+exit;
+
+#SETUP ORACLE DEBEZIUM USER
+sqlplus sys/password@//localhost:1521/ORCLCDB as sysdba
+CREATE TABLESPACE logminer_tbs DATAFILE '/opt/oracle/oradata/ORCLCDB/logminer_tbs.dbf' SIZE 25M REUSE AUTOEXTEND ON MAXSIZE UNLIMITED;
+exit;
+
+sqlplus sys/password@//localhost:1521/ORCLPDB1 as sysdba
+CREATE TABLESPACE logminer_tbs DATAFILE '/opt/oracle/oradata/ORCLCDB/ORCLPDB1/logminer_tbs.dbf' SIZE 25M REUSE AUTOEXTEND ON MAXSIZE UNLIMITED;
+exit;
+
+sqlplus sys/password@//localhost:1521/ORCLCDB as sysdba
+CREATE USER c##dbzuser IDENTIFIED BY dbz DEFAULT TABLESPACE logminer_tbs QUOTA UNLIMITED ON logminer_tbs CONTAINER=ALL;
+GRANT CREATE SESSION TO c##dbzuser CONTAINER=ALL;
+GRANT SET CONTAINER TO c##dbzuser CONTAINER=ALL;
+GRANT SELECT ON V_$DATABASE to c##dbzuser CONTAINER=ALL;
+GRANT FLASHBACK ANY TABLE TO c##dbzuser CONTAINER=ALL;
+GRANT SELECT ANY TABLE TO c##dbzuser CONTAINER=ALL;
+GRANT SELECT_CATALOG_ROLE TO c##dbzuser CONTAINER=ALL;
+GRANT EXECUTE_CATALOG_ROLE TO c##dbzuser CONTAINER=ALL;
+GRANT SELECT ANY TRANSACTION TO c##dbzuser CONTAINER=ALL;
+GRANT LOGMINING TO c##dbzuser CONTAINER=ALL;
+GRANT ALTER SESSION, SET CONTAINER TO c##dbzuser CONTAINER=ALL;
+
+GRANT CREATE TABLE TO c##dbzuser CONTAINER=ALL;
+GRANT LOCK ANY TABLE TO c##dbzuser CONTAINER=ALL;
+GRANT CREATE SEQUENCE TO c##dbzuser CONTAINER=ALL;
+
+GRANT EXECUTE ON DBMS_LOGMNR TO c##dbzuser CONTAINER=ALL; 
+GRANT EXECUTE ON DBMS_LOGMNR_D TO c##dbzuser CONTAINER=ALL;
+
+GRANT SELECT ON V_$LOG TO c##dbzuser CONTAINER=ALL;
+GRANT SELECT ON V_$LOG_HISTORY TO c##dbzuser CONTAINER=ALL;
+GRANT SELECT ON V_$LOGMNR_LOGS TO c##dbzuser CONTAINER=ALL;
+GRANT SELECT ON V_$LOGMNR_CONTENTS TO c##dbzuser CONTAINER=ALL;
+GRANT SELECT ON V_$LOGMNR_PARAMETERS TO c##dbzuser CONTAINER=ALL;
+GRANT SELECT ON V_$LOGFILE TO c##dbzuser CONTAINER=ALL;
+GRANT SELECT ON V_$ARCHIVED_LOG TO c##dbzuser CONTAINER=ALL;
+GRANT SELECT ON V_$ARCHIVE_DEST_STATUS TO c##dbzuser CONTAINER=ALL; 
+GRANT SELECT ON V_$ARCHIVE_DEST_STATUS TO c##dbzuser CONTAINER=ALL; 
+GRANT SELECT ON V_$TRANSACTION TO c##dbzuser CONTAINER=ALL;
+
+GRANT SELECT ON V_$MYSTAT TO c##dbzuser CONTAINER=ALL;
+GRANT SELECT ON V_$STATNAME TO c##dbzuser CONTAINER=ALL;
+exit;
+
+# CREATE TABLE FOR CDC
+sqlplus sys/password@//localhost:1521/ORCLPDB1 as sysdba
+
+CREATE USER appuser IDENTIFIED BY apppassword;
+
+GRANT CONNECT, RESOURCE TO appuser;
+ALTER USER appuser QUOTA UNLIMITED ON users;
+
+CREATE TABLE appuser.test_cdc (id NUMBER PRIMARY KEY, status VARCHAR2(50));
+BEGIN
+    -- 1. Creates new records (Testing "op": "c")
+    FOR i IN 1..100 LOOP
+        INSERT INTO appuser.test_cdc (id, status) 
+        VALUES (i, 'RECEIVED');
+    END LOOP;
+    COMMIT;
+
+    -- 2. Updates 50 records (Testing "op": "u")
+    FOR i IN 1..50 LOOP
+        UPDATE appuser.test_cdc 
+        SET status = 'PROCESSING' 
+        WHERE id = i;
+    END LOOP;
+    COMMIT;
+
+    -- 3. Deletes 20 records (Testing "op": "d")
+    FOR i IN 81..100 LOOP
+        DELETE FROM appuser.test_cdc 
+        WHERE id = i;
+    END LOOP;
+    COMMIT;
+END;
+
+exit;
+exit
+
+# KAFKA CONNECT
+# BE SURE IT HAS THE ORACLE CONNECTOR
+curl localhost:8083/connector-plugins | jq
+curl -i -X POST -H "Content-Type:application/json" http://localhost:8083/connectors/ -d @oracle-connector.json
+curl localhost:8083/connectors | jq
+curl localhost:8083/connectors/oracle-connector/status | jq
+docker logs kafka-connect
+
+# KAFKA
+docker exec -it kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic cdc_teste.APPUSER.TEST_CDC --from-beginning | jq
